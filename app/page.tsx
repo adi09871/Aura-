@@ -13,6 +13,24 @@ interface MeshNode {
 }
 
 export default function Home() {
+    // Add missing handleBroadcastSOS function
+    const handleBroadcastSOS = async (customMsg?: string) => {
+      setIsSending(true);
+      try {
+        await db.sosMessages.add({
+          message: customMsg || "Manual Emergency Assistance Required!",
+          timestamp: new Date().toLocaleTimeString(),
+          isSynced: false
+        });
+        setTimeout(async () => {
+          const latest = await db.sosMessages.orderBy('id').last();
+          if (latest?.id) await db.sosMessages.update(latest.id, { isSynced: true });
+        }, 3000);
+      } catch (err) {
+        console.error("Dexie Error:", err);
+      }
+      setIsSending(false);
+    };
   const allMessages = useLiveQuery(() => db.sosMessages.toArray());
   const [isSending, setIsSending] = useState(false);
   const [nodes, setNodes] = useState<MeshNode[]>([]);
@@ -86,45 +104,61 @@ export default function Home() {
   }, [isListening, activeDanger]);
 
   // 3. MESH DISCOVERY (Active only when on Mesh Tab for performance)
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isListening) {
-      interval = setInterval(() => {
-        setNodes(prev => {
-          if (prev.length < 5) {
-            return [...prev, {
-              id: `PEER_MOB_${Math.floor(Math.random() * 9000) + 1000}`,
-              x: Math.random() * 70 + 15,
-              y: Math.random() * 70 + 15,
-              type: Math.random() > 0.5 ? 'peer' : 'relay'
-            }];
-          }
-          return prev;
-        });
-      }, 4000); // Node scan speed
-    } else {
-      setNodes([]);
+  const [deviceId] = useState(() => {
+  if (typeof window !== 'undefined') {
+    let id = localStorage.getItem('aura_device_id');
+    if (!id) {
+      id = 'NODE_' + Math.random().toString(36).substr(2, 6).toUpperCase();
+      localStorage.setItem('aura_device_id', id);
     }
-    return () => clearInterval(interval);
-  }, [isListening]);
+    return id;
+  }
+  return 'NODE_UNKNOWN';
+});
 
-  const handleBroadcastSOS = async (customMsg?: string) => {
-    setIsSending(true);
-    try {
-      const id = await db.sosMessages.add({
-        message: customMsg || "[MANUAL SOS] User triggered emergency from Main Node!",
-        timestamp: new Date().toLocaleTimeString(),
-        isSynced: false 
-      });
-      setTimeout(async () => {
-        if (id) await db.sosMessages.update(id, { isSynced: true });
-      }, 2500);
-    } catch (err) {
-      console.error("Dexie Error:", err);
-    } finally {
-      setIsSending(false);
-    }
-  };
+const [deviceType, setDeviceType] = useState('LAPTOP');
+
+useEffect(() => {
+  setMounted(true);
+  if (typeof navigator !== 'undefined') {
+    setDeviceType(navigator.userAgent.includes('Mobile') ? 'MOBILE' : 'LAPTOP');
+  }
+}, []);
+
+
+// 2. 🚨 असली MESH DISCOVERY LOGIC 🚨
+useEffect(() => {
+  let interval: NodeJS.Timeout;
+  
+  if (isListening && activeTab === 'mesh') {
+    const pingMeshNetwork = async () => {
+      try {
+        // A. खुद को नेटवर्क में रजिस्टर करो
+        await fetch('/api/mesh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: deviceId, type: deviceType })
+        });
+
+        // B. नेटवर्क में बाकी कौन-कौन है, उनकी लिस्ट लाओ
+        const res = await fetch('/api/mesh');
+        const data = await res.json();
+        
+        // C. खुद की ID हटाकर बाकी असली डिवाइस को मैप पर सेट करो
+        setNodes(data.filter((n: any) => n.id !== deviceId));
+      } catch (err) {
+        console.error("Mesh Network Offline");
+      }
+    };
+
+    pingMeshNetwork(); // तुरंत चेक करो
+    interval = setInterval(pingMeshNetwork, 3000); // हर 3 सेकंड में असली डिवाइस स्कैन करो
+  } else {
+    setNodes([]);
+  }
+
+  return () => clearInterval(interval);
+}, [isListening, activeTab, deviceId, deviceType]);
 
   const getDangerColor = () => {
     if (!activeDanger) return 'bg-cyan-400 border-cyan-400';
