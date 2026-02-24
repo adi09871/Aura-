@@ -18,10 +18,10 @@
 // import * as tf from '@tensorflow/tfjs';
 
 export interface ClassificationResult {
-  label: string;
-  confidence: number;
+label: string;
   isAlert: boolean;
-}
+  score?: number;      // Optional score property
+  confidence?: number;}
 
 // Alert-worthy sound classes (subset of YAMNet's 521 classes)
 export const ALERT_CLASSES = [
