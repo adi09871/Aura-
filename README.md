@@ -1,6 +1,4 @@
-<<<<<<< HEAD
 # Aura-
-=======
 # 🛰️ AuraMesh — Offline-First Emergency Command Center
 
 A dark-mode, bento-box dashboard built with **Next.js 14**, **Dexie.js (IndexedDB)**, **Web Audio API**, and a **TensorFlow.js** skeleton for local acoustic sound classification.
@@ -125,4 +123,4 @@ For localhost, permissions are granted automatically in most browsers.
 npm run build
 npm start
 ```
->>>>>>> 022f505 (Initial commit)
+
